@@ -10,6 +10,7 @@ import {
   fetchInstallationCosts,
   fetchOpenAiOrgCosts,
   fetchUsageCosts,
+  verifyAdminKey,
   type CostQuery,
   type CostUsage,
   type CostUsageResult,
@@ -45,11 +46,14 @@ function App() {
     () => sessionStorage.getItem(KEY_STORAGE) ?? '',
   )
   const [draftKey, setDraftKey] = useState('')
+  const [authError, setAuthError] = useState('')
+  const [authLoading, setAuthLoading] = useState(false)
 
   const lockDashboard = () => {
     sessionStorage.removeItem(KEY_STORAGE)
     setAdminKey('')
     setDraftKey('')
+    setAuthError('')
   }
 
   if (!adminKey) {
@@ -65,13 +69,29 @@ function App() {
               only for this browser session.
             </p>
           </div>
+          {authError && (
+            <div className="error-banner auth-error" role="alert">
+              {authError}
+            </div>
+          )}
           <form
             onSubmit={(event) => {
               event.preventDefault()
               const key = draftKey.trim()
-              if (!key) return
-              sessionStorage.setItem(KEY_STORAGE, key)
-              setAdminKey(key)
+              if (!key || authLoading) return
+              setAuthLoading(true)
+              setAuthError('')
+              verifyAdminKey(key)
+                .then(() => {
+                  sessionStorage.setItem(KEY_STORAGE, key)
+                  setAdminKey(key)
+                })
+                .catch(() => {
+                  setAuthError('Admin API key is wrong')
+                })
+                .finally(() => {
+                  setAuthLoading(false)
+                })
             }}
           >
             <label htmlFor="admin-key">Admin API key</label>
@@ -81,11 +101,17 @@ function App() {
                 type="password"
                 autoComplete="off"
                 value={draftKey}
-                onChange={(event) => setDraftKey(event.target.value)}
+                onChange={(event) => {
+                  setDraftKey(event.target.value)
+                  if (authError) setAuthError('')
+                }}
                 placeholder="Enter your key"
                 autoFocus
+                disabled={authLoading}
               />
-              <button type="submit">Open dashboard</button>
+              <button type="submit" disabled={authLoading || !draftKey.trim()}>
+                {authLoading ? 'Checking…' : 'Open dashboard'}
+              </button>
             </div>
           </form>
           <p className="privacy-note">

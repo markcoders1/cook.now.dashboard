@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { fetchInstallationCosts, fetchOpenAiOrgCosts, fetchUsageCosts } from './api'
+import {
+  fetchInstallationCosts,
+  fetchOpenAiOrgCosts,
+  fetchUsageCosts,
+  verifyAdminKey,
+} from './api'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -109,6 +114,53 @@ describe('installation cost API client', () => {
     expect(String(url)).toContain('search=ins_test')
     expect(String(url)).toContain('platform=android')
     expect(init?.headers).toEqual({ 'X-Admin-Key': 'runtime-admin-key' })
+  })
+})
+
+describe('verifyAdminKey', () => {
+  it('accepts a valid admin key', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            rateCardVersion: 'test-v1',
+            data: {
+              summary: {
+                requests: 0,
+                totalTokens: 0,
+                estimatedCostUsd: 0,
+                pricingComplete: true,
+              },
+              items: [],
+              page: 1,
+              pageSize: 1,
+              total: 0,
+              totalPages: 1,
+            },
+          }),
+          { status: 200 },
+        ),
+      ),
+    )
+
+    await expect(verifyAdminKey('valid-key')).resolves.toBeUndefined()
+  })
+
+  it('rejects an invalid admin key', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockResolvedValue(
+        new Response(
+          JSON.stringify({ error: { message: 'Admin API key is invalid' } }),
+          { status: 401 },
+        ),
+      ),
+    )
+
+    await expect(verifyAdminKey('wrong-key')).rejects.toThrow(
+      'Admin API key is invalid',
+    )
   })
 })
 

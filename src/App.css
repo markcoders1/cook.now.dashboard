@@ -806,6 +806,10 @@ tbody tr:hover:not(.detail-row) {
   color: var(--green);
 }
 
+.auth-error {
+  margin-bottom: 18px;
+}
+
 .auth-copy {
   margin: 42px 0 30px;
 }

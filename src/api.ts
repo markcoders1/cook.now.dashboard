@@ -207,6 +207,18 @@ export async function fetchUsageCosts(
   return fetchAdminJson('/v1/admin/ai-cost/usage', adminKey, query, signal)
 }
 
+export async function verifyAdminKey(
+  adminKey: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  await fetchAdminJson(
+    '/v1/admin/ai-cost/usage',
+    adminKey,
+    { page: 1, pageSize: 1 },
+    signal,
+  )
+}
+
 export async function fetchInstallationCosts(
   adminKey: string,
   query: InstallationQuery,
