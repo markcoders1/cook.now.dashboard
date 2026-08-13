@@ -14,6 +14,7 @@ import {
 } from 'recharts'
 import type {
   InstallationCost,
+  ModelCost,
   OpenAiOrgCostDay,
   OpenAiOrgModelUsage,
 } from '../api'
@@ -185,6 +186,60 @@ export function ModelUsageChart({ data }: { data: OpenAiOrgModelUsage[] }) {
           }}
         />
         <Bar dataKey="tokens" fill={COLORS.vision} radius={[0, 6, 6, 0]} maxBarSize={22} />
+      </BarChart>
+    </ChartShell>
+  )
+}
+
+export function AppModelCostChart({ data }: { data: ModelCost[] }) {
+  const chartData = [...data]
+    .sort((left, right) => right.estimatedCostUsd - left.estimatedCostUsd)
+    .slice(0, 8)
+    .map((row) => ({
+      model: row.model.length > 22 ? `${row.model.slice(0, 20)}…` : row.model,
+      costUsd: row.estimatedCostUsd,
+      requests: row.requests,
+    }))
+
+  return (
+    <ChartShell
+      title="Cost by model"
+      subtitle="App-tracked estimated spend"
+      emptyMessage="No model costs yet."
+      hasData={chartData.length > 0}
+    >
+      <BarChart
+        data={chartData}
+        layout="vertical"
+        margin={{ top: 4, right: 12, left: 8, bottom: 4 }}
+      >
+        <CartesianGrid stroke={COLORS.grid} strokeDasharray="4 4" horizontal={false} />
+        <XAxis
+          type="number"
+          tick={{ fill: COLORS.muted, fontSize: 11 }}
+          axisLine={false}
+          tickLine={false}
+          tickFormatter={(value: number) => formatUsd(value)}
+        />
+        <YAxis
+          type="category"
+          dataKey="model"
+          width={108}
+          tick={{ fill: COLORS.muted, fontSize: 11 }}
+          axisLine={false}
+          tickLine={false}
+        />
+        <Tooltip
+          formatter={(value, name) =>
+            name === 'costUsd' ? formatUsd(Number(value)) : Number(value)
+          }
+          contentStyle={{
+            borderRadius: 10,
+            border: `1px solid ${COLORS.grid}`,
+            fontSize: 12,
+          }}
+        />
+        <Bar dataKey="costUsd" fill={COLORS.greenLight} radius={[0, 6, 6, 0]} maxBarSize={22} />
       </BarChart>
     </ChartShell>
   )

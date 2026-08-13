@@ -34,6 +34,7 @@ export type CostUsageResult = {
 export type CostQuery = {
   search?: string
   installationId?: string
+  model?: string
   source?: 'realtime' | 'vision'
   sortBy?: 'occurredAt' | 'totalTokens' | 'estimatedCostUsd'
   sortDirection?: 'asc' | 'desc'
@@ -77,6 +78,45 @@ export type InstallationCostResult = {
 export type InstallationQuery = {
   search?: string
   platform?: 'ios' | 'android'
+  sortBy?: 'estimatedCostUsd' | 'totalTokens' | 'requests' | 'lastActivityAt'
+  sortDirection?: 'asc' | 'desc'
+  page?: number
+  pageSize?: number
+}
+
+export type ModelCost = {
+  model: string
+  requests: number
+  realtimeRequests: number
+  visionRequests: number
+  totalTokens: number
+  estimatedCostUsd: number
+  pricingComplete: boolean
+  lastActivityAt: string | null
+}
+
+export type ModelCostData = {
+  summary: {
+    models: number
+    requests: number
+    totalTokens: number
+    estimatedCostUsd: number
+  }
+  items: ModelCost[]
+  page: number
+  pageSize: number
+  total: number
+  totalPages: number
+}
+
+export type ModelCostResult = {
+  data: ModelCostData
+  rateCardVersion: string
+}
+
+export type ModelQuery = {
+  search?: string
+  source?: 'realtime' | 'vision'
   sortBy?: 'estimatedCostUsd' | 'totalTokens' | 'requests' | 'lastActivityAt'
   sortDirection?: 'asc' | 'desc'
   page?: number
@@ -230,6 +270,14 @@ export async function fetchInstallationCosts(
     query,
     signal,
   )
+}
+
+export async function fetchModelCosts(
+  adminKey: string,
+  query: ModelQuery,
+  signal?: AbortSignal,
+): Promise<ModelCostResult> {
+  return fetchAdminJson('/v1/admin/ai-cost/models', adminKey, query, signal)
 }
 
 export async function fetchOpenAiOrgCosts(

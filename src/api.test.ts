@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   fetchInstallationCosts,
+  fetchModelCosts,
   fetchOpenAiOrgCosts,
   fetchUsageCosts,
   verifyAdminKey,
@@ -113,6 +114,55 @@ describe('installation cost API client', () => {
     expect(String(url)).toContain('/v1/admin/ai-cost/installations')
     expect(String(url)).toContain('search=ins_test')
     expect(String(url)).toContain('platform=android')
+    expect(init?.headers).toEqual({ 'X-Admin-Key': 'runtime-admin-key' })
+  })
+})
+
+describe('model cost API client', () => {
+  it('requests model aggregates with filters', async () => {
+    const payload = {
+      rateCardVersion: 'test-v1',
+      data: {
+        summary: {
+          models: 1,
+          requests: 2,
+          totalTokens: 300,
+          estimatedCostUsd: 0.12,
+        },
+        items: [
+          {
+            model: 'gpt-realtime-2.1',
+            requests: 2,
+            realtimeRequests: 2,
+            visionRequests: 0,
+            totalTokens: 300,
+            estimatedCostUsd: 0.12,
+            pricingComplete: true,
+            lastActivityAt: '2026-08-07T12:00:00.000Z',
+          },
+        ],
+        page: 1,
+        pageSize: 20,
+        total: 1,
+        totalPages: 1,
+      },
+    }
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      fetchModelCosts('runtime-admin-key', {
+        search: 'realtime',
+        source: 'realtime',
+      }),
+    ).resolves.toEqual(payload)
+
+    const [url, init] = fetchMock.mock.calls[0]!
+    expect(String(url)).toContain('/v1/admin/ai-cost/models')
+    expect(String(url)).toContain('search=realtime')
+    expect(String(url)).toContain('source=realtime')
     expect(init?.headers).toEqual({ 'X-Admin-Key': 'runtime-admin-key' })
   })
 })

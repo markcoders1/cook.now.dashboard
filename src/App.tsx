@@ -8,6 +8,7 @@ import {
 import { Link, Route, Routes } from 'react-router-dom'
 import {
   fetchInstallationCosts,
+  fetchModelCosts,
   fetchOpenAiOrgCosts,
   fetchUsageCosts,
   verifyAdminKey,
@@ -17,10 +18,14 @@ import {
   type InstallationCost,
   type InstallationCostResult,
   type InstallationQuery,
+  type ModelCost,
+  type ModelCostResult,
+  type ModelQuery,
   type OpenAiOrgResult,
 } from './api'
 import DeviceDetailPage from './pages/DeviceDetailPage'
 import {
+  AppModelCostChart,
   DailySpendChart,
   ModelUsageChart,
   SourceSplitChart,
@@ -157,11 +162,19 @@ function DashboardHome({
     sortBy: 'estimatedCostUsd',
     sortDirection: 'desc',
   })
+  const [modelQuery, setModelQuery] = useState<ModelQuery>({
+    page: 1,
+    pageSize: 20,
+    sortBy: 'estimatedCostUsd',
+    sortDirection: 'desc',
+  })
   const [result, setResult] = useState<CostUsageResult>()
   const [installationResult, setInstallationResult] =
     useState<InstallationCostResult>()
+  const [modelResult, setModelResult] = useState<ModelCostResult>()
   const [chartInstallations, setChartInstallations] =
     useState<InstallationCostResult>()
+  const [chartModels, setChartModels] = useState<ModelCostResult>()
   const [orgResult, setOrgResult] = useState<OpenAiOrgResult>()
   const [orgDays, setOrgDays] = useState(7)
   const [dailySpendPage, setDailySpendPage] = useState(1)
@@ -169,6 +182,7 @@ function DashboardHome({
   const [orgError, setOrgError] = useState('')
   const [loading, setLoading] = useState(false)
   const [installationLoading, setInstallationLoading] = useState(false)
+  const [modelLoading, setModelLoading] = useState(false)
   const [orgLoading, setOrgLoading] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
   const [expandedId, setExpandedId] = useState<string>()
@@ -240,6 +254,49 @@ function DashboardHome({
     installationQuery.platform,
     refreshKey,
   ])
+
+  useEffect(() => {
+    if (!adminKey) return
+    const controller = new AbortController()
+    setModelLoading(true)
+    fetchModelCosts(adminKey, modelQuery, controller.signal)
+      .then(setModelResult)
+      .catch((failure: unknown) => {
+        if (!controller.signal.aborted) {
+          setError(
+            failure instanceof Error
+              ? failure.message
+              : 'Unable to load model costs',
+          )
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setModelLoading(false)
+      })
+    return () => controller.abort()
+  }, [adminKey, modelQuery, refreshKey])
+
+  useEffect(() => {
+    if (!adminKey) return
+    const controller = new AbortController()
+    fetchModelCosts(
+      adminKey,
+      {
+        page: 1,
+        pageSize: 100,
+        sortBy: 'estimatedCostUsd',
+        sortDirection: 'desc',
+        search: modelQuery.search,
+        source: modelQuery.source,
+      },
+      controller.signal,
+    )
+      .then(setChartModels)
+      .catch(() => {
+        if (!controller.signal.aborted) setChartModels(undefined)
+      })
+    return () => controller.abort()
+  }, [adminKey, modelQuery.search, modelQuery.source, refreshKey])
 
   useEffect(() => {
     if (!adminKey) return
@@ -531,6 +588,7 @@ function DashboardHome({
           <TopInstallationsChart
             data={chartInstallations?.data.items ?? []}
           />
+          <AppModelCostChart data={chartModels?.data.items ?? []} />
           <SourceSplitChart
             realtimeRequests={sourceSplit.realtimeRequests}
             visionRequests={sourceSplit.visionRequests}
@@ -673,6 +731,154 @@ function DashboardHome({
         <section className="table-card">
           <div className="table-heading">
             <div>
+              <h2>Cost by model</h2>
+              <p>
+                Estimated spend grouped by model from the configured rate card.
+              </p>
+            </div>
+            <div className="filters">
+              <label className="search-field">
+                <span aria-hidden="true">⌕</span>
+                <span className="sr-only">Search models</span>
+                <input
+                  type="search"
+                  value={modelQuery.search ?? ''}
+                  onChange={(event) =>
+                    setModelQuery((current) => ({
+                      ...current,
+                      search: event.target.value,
+                      page: 1,
+                    }))
+                  }
+                  placeholder="Search model name"
+                />
+              </label>
+              <select
+                aria-label="Filter by source"
+                value={modelQuery.source ?? ''}
+                onChange={(event) =>
+                  setModelQuery((current) => ({
+                    ...current,
+                    source: event.target.value
+                      ? (event.target.value as 'realtime' | 'vision')
+                      : undefined,
+                    page: 1,
+                  }))
+                }
+              >
+                <option value="">All sources</option>
+                <option value="realtime">Realtime</option>
+                <option value="vision">Vision</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Model</th>
+                  <ModelSortableHeader
+                    label="Requests"
+                    field="requests"
+                    query={modelQuery}
+                    setQuery={setModelQuery}
+                  />
+                  <ModelSortableHeader
+                    label="Tokens"
+                    field="totalTokens"
+                    query={modelQuery}
+                    setQuery={setModelQuery}
+                  />
+                  <ModelSortableHeader
+                    label="Est. cost"
+                    field="estimatedCostUsd"
+                    query={modelQuery}
+                    setQuery={setModelQuery}
+                  />
+                  <ModelSortableHeader
+                    label="Last activity"
+                    field="lastActivityAt"
+                    query={modelQuery}
+                    setQuery={setModelQuery}
+                  />
+                  <th aria-label="Actions" />
+                </tr>
+              </thead>
+              <tbody>
+                {modelResult?.data.items.map((modelCost) => (
+                  <ModelRow
+                    key={modelCost.model}
+                    modelCost={modelCost}
+                    selected={query.model === modelCost.model}
+                    onSelect={() =>
+                      setQuery((current) => ({
+                        ...current,
+                        model:
+                          current.model === modelCost.model
+                            ? undefined
+                            : modelCost.model,
+                        page: 1,
+                      }))
+                    }
+                  />
+                ))}
+              </tbody>
+            </table>
+            {!modelLoading && modelResult?.data.items.length === 0 && (
+              <div className="empty-state">
+                <span>◇</span>
+                <h3>No model costs yet</h3>
+                <p>Run a voice or vision session to populate model spend.</p>
+              </div>
+            )}
+            {modelLoading && !modelResult && (
+              <div className="loading-state">Loading model costs…</div>
+            )}
+          </div>
+
+          <footer className="pagination">
+            <p>
+              Showing {modelResult?.data.items.length ?? 0} of{' '}
+              {modelResult?.data.total ?? 0} models
+            </p>
+            <div>
+              <button
+                disabled={(modelQuery.page ?? 1) <= 1 || modelLoading}
+                onClick={() =>
+                  setModelQuery((current) => ({
+                    ...current,
+                    page: Math.max(1, (current.page ?? 1) - 1),
+                  }))
+                }
+              >
+                Previous
+              </button>
+              <span>
+                Page {modelResult?.data.page ?? modelQuery.page ?? 1} of{' '}
+                {modelResult?.data.totalPages ?? 1}
+              </span>
+              <button
+                disabled={
+                  (modelQuery.page ?? 1) >=
+                    (modelResult?.data.totalPages ?? 1) || modelLoading
+                }
+                onClick={() =>
+                  setModelQuery((current) => ({
+                    ...current,
+                    page: (current.page ?? 1) + 1,
+                  }))
+                }
+              >
+                Next
+              </button>
+            </div>
+          </footer>
+        </section>
+
+        <section className="table-card">
+          <div className="table-heading">
+            <div>
               <h2>App usage ledger</h2>
               <p>Each Realtime turn and vision check tracked by cook.now.</p>
               {query.installationId && (
@@ -685,6 +891,23 @@ function DashboardHome({
                       setQuery((current) => ({
                         ...current,
                         installationId: undefined,
+                        page: 1,
+                      }))
+                    }
+                  >
+                    Clear filter
+                  </button>
+                </p>
+              )}
+              {query.model && (
+                <p className="filter-chip">
+                  Model <code>{query.model}</code>
+                  <button
+                    className="text-button"
+                    onClick={() =>
+                      setQuery((current) => ({
+                        ...current,
+                        model: undefined,
                         page: 1,
                       }))
                     }
@@ -881,6 +1104,86 @@ function SortableHeader({
         </span>
       </button>
     </th>
+  )
+}
+
+function ModelSortableHeader({
+  label,
+  field,
+  query,
+  setQuery,
+}: {
+  label: string
+  field: NonNullable<ModelQuery['sortBy']>
+  query: ModelQuery
+  setQuery: Dispatch<SetStateAction<ModelQuery>>
+}) {
+  const active = query.sortBy === field
+  return (
+    <th>
+      <button
+        className="sort-button"
+        onClick={() =>
+          setQuery((current) => ({
+            ...current,
+            sortBy: field,
+            sortDirection:
+              current.sortBy === field && current.sortDirection === 'desc'
+                ? 'asc'
+                : 'desc',
+            page: 1,
+          }))
+        }
+      >
+        {label}
+        <span aria-hidden="true">
+          {active && query.sortDirection === 'asc' ? '↑' : '↓'}
+        </span>
+      </button>
+    </th>
+  )
+}
+
+function ModelRow({
+  modelCost,
+  selected,
+  onSelect,
+}: {
+  modelCost: ModelCost
+  selected: boolean
+  onSelect: () => void
+}) {
+  return (
+    <tr className={selected ? 'selected-row' : undefined}>
+      <td>
+        <strong className="recipe-name">{modelCost.model}</strong>
+      </td>
+      <td className="number-cell">
+        {formatNumber(modelCost.requests)}
+        <small>
+          {modelCost.realtimeRequests} RT · {modelCost.visionRequests} vis
+        </small>
+      </td>
+      <td className="number-cell">{formatCompact(modelCost.totalTokens)}</td>
+      <td className="cost-cell">
+        {formatUsd(modelCost.estimatedCostUsd)}
+        {!modelCost.pricingComplete && (
+          <span className="warning-dot" title="Rate missing for this model">
+            !
+          </span>
+        )}
+      </td>
+      <td>
+        {modelCost.lastActivityAt
+          ? formatDate(modelCost.lastActivityAt)
+          : '—'}
+      </td>
+      <td>
+        <button className="detail-button" onClick={onSelect}>
+          {selected ? 'Filtered' : 'Filter'}
+        </button>
+      </td>
+    </tr>
   )
 }
 
