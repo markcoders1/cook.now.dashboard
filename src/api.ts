@@ -168,6 +168,25 @@ export type ConversationTurn = {
   responseId?: string
 }
 
+export type ConversationTextItem = ConversationTurn & {
+  kind: 'text'
+}
+
+export type ConversationImageItem = {
+  kind: 'image'
+  id: string
+  installationId: string
+  sessionId: string
+  occurredAt: string
+  stepId: string
+  question?: string
+  imageUrl: string
+}
+
+export type ConversationTimelineItem =
+  | ConversationTextItem
+  | ConversationImageItem
+
 export type InstallationSessionSummary = {
   sessionId: string
   recipeId: string
@@ -190,7 +209,7 @@ export type InstallationDetail = {
 }
 
 export type ConversationTurnsData = {
-  items: ConversationTurn[]
+  items: ConversationTimelineItem[]
   page: number
   pageSize: number
   total: number
@@ -318,4 +337,19 @@ export async function fetchInstallationConversations(
     query,
     signal,
   )
+}
+
+export async function fetchSessionCaptureImageBlob(
+  adminKey: string,
+  imageUrl: string,
+  signal?: AbortSignal,
+): Promise<Blob> {
+  const response = await fetch(`${API_BASE_URL}${imageUrl}`, {
+    headers: { 'X-Admin-Key': adminKey },
+    signal,
+  })
+  if (!response.ok) {
+    throw new Error(`Capture image request failed (${response.status})`)
+  }
+  return response.blob()
 }

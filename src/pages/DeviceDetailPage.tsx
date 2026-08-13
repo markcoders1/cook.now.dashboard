@@ -3,7 +3,9 @@ import { Link, useParams } from 'react-router-dom'
 import {
   fetchInstallationConversations,
   fetchInstallationDetail,
-  type ConversationTurn,
+  fetchSessionCaptureImageBlob,
+  type ConversationImageItem,
+  type ConversationTimelineItem,
   type InstallationDetail,
   type InstallationSessionSummary,
 } from '../api'
@@ -20,7 +22,7 @@ export default function DeviceDetailPage({
 }: DeviceDetailPageProps) {
   const { installationId = '' } = useParams()
   const [detail, setDetail] = useState<InstallationDetail>()
-  const [turns, setTurns] = useState<ConversationTurn[]>([])
+  const [timeline, setTimeline] = useState<ConversationTimelineItem[]>([])
   const [selectedSessionId, setSelectedSessionId] = useState<string>()
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
@@ -53,7 +55,7 @@ export default function DeviceDetailPage({
 
   useEffect(() => {
     if (!installationId || !selectedSessionId) {
-      setTurns([])
+      setTimeline([])
       return
     }
     const controller = new AbortController()
@@ -64,7 +66,7 @@ export default function DeviceDetailPage({
       { sessionId: selectedSessionId, page: 1, pageSize: 100 },
       controller.signal,
     )
-      .then((result) => setTurns(result.data.items))
+      .then((result) => setTimeline(result.data.items))
       .catch((failure: unknown) => {
         if (!controller.signal.aborted) {
           setError(
@@ -159,34 +161,100 @@ export default function DeviceDetailPage({
               </div>
 
               <div className="conversation-thread">
-                {turnsLoading && turns.length === 0 && (
+                {turnsLoading && timeline.length === 0 && (
                   <div className="loading-state compact">Loading turns…</div>
                 )}
-                {!turnsLoading && selectedSessionId && turns.length === 0 && (
+                {!turnsLoading && selectedSessionId && timeline.length === 0 && (
                   <div className="empty-state compact">
-                    <p>No conversation turns recorded for this session.</p>
+                    <p>No conversation activity recorded for this session.</p>
                   </div>
                 )}
-                {turns.map((turn) => (
-                  <article
-                    key={turn.id}
-                    className={`conversation-bubble conversation-${turn.role}`}
-                  >
-                    <header>
-                      <strong>{turn.role === 'user' ? 'You' : 'Coach'}</strong>
-                      <time dateTime={turn.occurredAt}>
-                        {formatDate(turn.occurredAt)}
-                      </time>
-                    </header>
-                    <p>{turn.text}</p>
-                  </article>
-                ))}
+                {timeline.map((item) =>
+                  item.kind === 'text' ? (
+                    <article
+                      key={item.id}
+                      className={`conversation-bubble conversation-${item.role}`}
+                    >
+                      <header>
+                        <strong>{item.role === 'user' ? 'You' : 'Coach'}</strong>
+                        <time dateTime={item.occurredAt}>
+                          {formatDate(item.occurredAt)}
+                        </time>
+                      </header>
+                      <p>{item.text}</p>
+                    </article>
+                  ) : (
+                    <ConversationImageCapture
+                      key={item.id}
+                      adminKey={adminKey}
+                      item={item}
+                    />
+                  ),
+                )}
               </div>
             </section>
           </div>
         )}
       </main>
     </div>
+  )
+}
+
+function ConversationImageCapture({
+  adminKey,
+  item,
+}: {
+  adminKey: string
+  item: ConversationImageItem
+}) {
+  const [objectUrl, setObjectUrl] = useState<string>()
+  const [imageError, setImageError] = useState('')
+
+  useEffect(() => {
+    const controller = new AbortController()
+    setObjectUrl(undefined)
+    setImageError('')
+    void fetchSessionCaptureImageBlob(adminKey, item.imageUrl, controller.signal)
+      .then((blob) => {
+        if (controller.signal.aborted) return
+        setObjectUrl(URL.createObjectURL(blob))
+      })
+      .catch((failure: unknown) => {
+        if (controller.signal.aborted) return
+        setImageError(
+          failure instanceof Error
+            ? failure.message
+            : 'Unable to load captured image',
+        )
+      })
+    return () => {
+      controller.abort()
+      setObjectUrl((current) => {
+        if (current) URL.revokeObjectURL(current)
+        return undefined
+      })
+    }
+  }, [adminKey, item.imageUrl])
+
+  return (
+    <article className="conversation-bubble conversation-image">
+      <header>
+        <strong>Camera capture</strong>
+        <time dateTime={item.occurredAt}>{formatDate(item.occurredAt)}</time>
+      </header>
+      {item.question ? <p className="conversation-image-caption">{item.question}</p> : null}
+      {objectUrl ? (
+        <img
+          alt={item.question ?? 'Cooking session camera capture'}
+          className="conversation-image-preview"
+          src={objectUrl}
+        />
+      ) : imageError ? (
+        <p className="conversation-image-error">{imageError}</p>
+      ) : (
+        <p className="conversation-image-loading">Loading image…</p>
+      )}
+    </article>
   )
 }
 

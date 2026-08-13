@@ -614,6 +614,34 @@ tbody tr:hover:not(.detail-row) {
   background: #fafbf8;
 }
 
+.conversation-image {
+  background: #fffdf8;
+}
+
+.conversation-image-caption {
+  margin: 0 0 10px;
+  color: #425047;
+}
+
+.conversation-image-preview {
+  display: block;
+  width: 100%;
+  max-width: 420px;
+  border-radius: 10px;
+  border: 1px solid #e4ebe6;
+}
+
+.conversation-image-loading,
+.conversation-image-error {
+  margin: 0;
+  color: #65736c;
+  font-size: 13px;
+}
+
+.conversation-image-error {
+  color: #9b3d3d;
+}
+
 .detail-row td {
   height: auto;
   padding: 0;
